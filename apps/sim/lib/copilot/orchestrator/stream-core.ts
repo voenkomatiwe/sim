@@ -166,6 +166,74 @@ export async function runStreamLoop(
 }
 
 /**
+ * Run the same SSE handler loop from an async iterable of events (e.g. from a local provider stream).
+ */
+export async function runStreamLoopFromEvents(
+  events: AsyncIterable<SSEEvent>,
+  context: StreamingContext,
+  execContext: ExecutionContext,
+  options: StreamLoopOptions
+): Promise<void> {
+  for await (const event of events) {
+    if (options.abortSignal?.aborted) {
+      context.wasAborted = true
+      break
+    }
+
+    const normalizedEvent = normalizeSseEvent(event)
+    const shouldSkipToolCall = shouldSkipToolCallEvent(normalizedEvent)
+    const shouldSkipToolResult = shouldSkipToolResultEvent(normalizedEvent)
+
+    if (!shouldSkipToolCall && !shouldSkipToolResult) {
+      try {
+        await options.onEvent?.(normalizedEvent)
+      } catch (error) {
+        logger.warn('Failed to forward SSE event', {
+          type: normalizedEvent.type,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
+    if (options.onBeforeDispatch?.(normalizedEvent, context)) {
+      if (context.streamComplete) break
+      continue
+    }
+
+    if (normalizedEvent.type === 'subagent_start') {
+      const eventData = normalizedEvent.data as Record<string, unknown> | undefined
+      const toolCallId = eventData?.tool_call_id as string | undefined
+      if (toolCallId) {
+        context.subAgentParentToolCallId = toolCallId
+        context.subAgentContent[toolCallId] = ''
+        context.subAgentToolCalls[toolCallId] = []
+      }
+      continue
+    }
+
+    if (normalizedEvent.type === 'subagent_end') {
+      context.subAgentParentToolCallId = undefined
+      continue
+    }
+
+    if (handleSubagentRouting(normalizedEvent, context)) {
+      const handler = subAgentHandlers[normalizedEvent.type]
+      if (handler) {
+        await handler(normalizedEvent, context, execContext, options)
+      }
+      if (context.streamComplete) break
+      continue
+    }
+
+    const handler = sseHandlers[normalizedEvent.type]
+    if (handler) {
+      await handler(normalizedEvent, context, execContext, options)
+    }
+    if (context.streamComplete) break
+  }
+}
+
+/**
  * Build a ToolCallSummary array from the streaming context.
  */
 export function buildToolCallSummaries(context: StreamingContext): ToolCallSummary[] {

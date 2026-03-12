@@ -178,10 +178,10 @@ ollama pull gemma3:4b
 
 ```bash
 # With NVIDIA GPU support
-docker compose --profile local-gpu -f docker-compose.ollama.yml up -d
+docker compose --profile gpu -f docker-compose.ollama.yml up -d
 
 # Without GPU (CPU only)
-docker compose --profile local-cpu -f docker-compose.ollama.yml up -d
+docker compose --profile cpu -f docker-compose.ollama.yml up -d
 
 # If hosting on a server, update the environment variables in the docker-compose.prod.yml file
 # to include the server's public IP then start again (OLLAMA_URL to i.e. http://1.1.1.1:11434)

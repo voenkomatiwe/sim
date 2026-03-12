@@ -4,6 +4,7 @@ import { prepareExecutionContext } from '@/lib/copilot/orchestrator/tool-executo
 import type { OrchestratorOptions, OrchestratorResult } from '@/lib/copilot/orchestrator/types'
 import { env } from '@/lib/core/config/env'
 import { buildToolCallSummaries, createStreamingContext, runStreamLoop } from './stream-core'
+import { isLocalCopilotModel, runLocalProviderStream } from './local-provider-stream'
 
 const logger = createLogger('CopilotOrchestrator')
 
@@ -27,20 +28,27 @@ export async function orchestrateCopilotStream(
   })
 
   try {
-    await runStreamLoop(
-      `${SIM_AGENT_API_URL}/api/chat-completion-streaming`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(env.COPILOT_API_KEY ? { 'x-api-key': env.COPILOT_API_KEY } : {}),
+    const payloadModel = String(requestPayload?.model ?? '')
+    const payloadProvider = requestPayload?.provider as string | undefined
+    if (isLocalCopilotModel(payloadModel, payloadProvider)) {
+      logger.info('Using local provider for Copilot', { model: requestPayload?.model })
+      await runLocalProviderStream(requestPayload, context, execContext, options)
+    } else {
+      await runStreamLoop(
+        `${SIM_AGENT_API_URL}/api/chat-completion-streaming`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(env.COPILOT_API_KEY ? { 'x-api-key': env.COPILOT_API_KEY } : {}),
+          },
+          body: JSON.stringify(requestPayload),
         },
-        body: JSON.stringify(requestPayload),
-      },
-      context,
-      execContext,
-      options
-    )
+        context,
+        execContext,
+        options
+      )
+    }
 
     const result: OrchestratorResult = {
       success: context.errors.length === 0,

@@ -17,7 +17,8 @@ export type SSEEventType =
 
 export interface SSEEvent {
   type: SSEEventType
-  data?: Record<string, unknown>
+  /** Content events use a plain string; other events use an object */
+  data?: Record<string, unknown> | string
   subagent?: string
   toolCallId?: string
   toolName?: string

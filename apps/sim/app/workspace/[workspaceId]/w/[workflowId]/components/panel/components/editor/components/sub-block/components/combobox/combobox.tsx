@@ -14,6 +14,7 @@ import type { SubBlockConfig } from '@/blocks/types'
 import { getDependsOnFields } from '@/blocks/utils'
 import { usePermissionConfig } from '@/hooks/use-permission-config'
 import { getProviderFromModel } from '@/providers/utils'
+import { useProvidersStore } from '@/stores/providers'
 import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
 import { useSubBlockStore } from '@/stores/workflows/subblock/store'
 import { useWorkflowStore } from '@/stores/workflows/workflow/store'
@@ -152,6 +153,14 @@ export const ComboBox = memo(function ComboBox({
 
   // Permission-based filtering for model dropdowns
   const { isProviderAllowed, isLoading: isPermissionLoading } = usePermissionConfig()
+
+  // Subscribe to provider models so model combobox re-renders when Ollama/vLLM/OpenRouter load
+  useProvidersStore((state) => [
+    state.providers.base.models.length,
+    state.providers.ollama.models.length,
+    state.providers.vllm.models.length,
+    state.providers.openrouter.models.length,
+  ])
 
   // Evaluate static options if provided as a function
   const staticOptions = useMemo(() => {
